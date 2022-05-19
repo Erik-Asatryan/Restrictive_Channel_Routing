@@ -1,0 +1,238 @@
+#include "CanvasGraphicsScene.h"
+
+#include "GraphicsIntervalItem.h"
+#include "IntervalGraph.h"
+#include "IntervalData.h"
+
+#include <QWidget>
+#include <QGraphicsTextItem>
+#include <QColor>
+#include <QBrush>
+#include <QPen>
+#include <vector>
+
+// experiments
+#include <QDebug>
+
+CanvasGraphicsScene::CanvasGraphicsScene( size_t nRows, size_t nCols, 
+										  qreal x, qreal y, qreal width, qreal height, 
+										  QWidget* pParent)
+	: GraphicsScene( x, y, width, height, pParent )
+	, m_nRows( 1 ) //@TODO we don't need nRows passed here
+	, m_nCols( nCols )
+{
+	setBackgroundBrush(Qt::darkGreen);
+
+	/* DRAW TERMINALS 
+	for (size_t i = 0; i < m_nRows; ++i)
+	{
+		QPen pen(Qt::gray, 1);
+		// draw terminals
+		drawLine( i, 0, i, m_nCols - 1, pen );
+	}
+	*/
+
+	QColor golden( 163, 136, 49 );
+	QBrush brush( golden );
+	QPen pen( golden );
+
+	for( size_t i = 0; i < m_nCols; ++i )
+	{
+		// @TODO create items with texts
+		//QGraphicsTextItem* pTextItem = new QGraphicsTextItem(std::to_string(i).c_str());
+		//pTextItem->setPos( nStartX + i * nDeltaX - 8, nStartY - 19 );
+		//addItem( pTextItem );
+
+		// draw top pins
+		drawVertex( -1, i, 2, true, pen );
+
+		// draw bottom pins
+		drawVertex( m_nRows, i, 2, false, pen );
+	}
+	
+	double dDeltaX = sceneRect().width() / ( m_nCols + 1 );
+
+	std::vector<size_t> vecTop    = { 1, 2, 1, 4, 3, 0, 5 },
+						vecBottom = { 3, 3, 2, 1, 5, 4, 0 };
+	//std::vector<size_t> vecTop =    { 1, 0, 0, 2, 0, 3, 0, 4, 0, 5, 0, 0, 6, 0, 7, 0, 0, 0, 8, 0, 0 },
+	//					vecBottom = { 0, 0, 1, 0, 2, 0, 3, 0, 4, 0, 0, 5, 0, 6, 0, 0, 0, 7, 0, 0, 8 };
+
+
+	// @TODO add dialog to ask user for vertex vectors.
+	IntervalGraph intervalGraph( vecTop, vecBottom );
+	std::multimap< size_t, IntervalData > mapIntervals( intervalGraph.getMapIntervals() );
+	
+	qDebug() << "Interval count: " << mapIntervals.size();
+	for( auto& it : mapIntervals )
+	{
+		drawInterval( it.second.getCols(), it.first, dDeltaX, 2, pen );
+	}
+}
+
+void CanvasGraphicsScene::refresh()
+{
+	qDebug() << "Refreshing scene...";
+	std::vector<size_t> vecTop, vecBottom;
+
+	for( auto it = m_vecTopItems.begin(); it != m_vecTopItems.end(); ++it )
+	{
+		const QString& sText = (*it)->toPlainText();
+		bool ok;
+		size_t nVertexVal = sText.toUInt( &ok );
+		if( !ok )
+		{
+			nVertexVal = 0;
+			(*it)->setPlainText( std::to_string( nVertexVal ).c_str() );
+		}
+
+		vecTop.push_back( nVertexVal );
+	}
+
+	for( auto it = m_vecBottomItems.begin(); it != m_vecBottomItems.end(); ++it )
+	{
+		const QString& sText = (*it)->toPlainText();
+		bool ok;
+		size_t nVertexVal = sText.toUInt( &ok );
+		if( !ok )
+		{
+			nVertexVal = 0;
+			(*it)->setPlainText( std::to_string( nVertexVal ).c_str() );
+		}
+
+		vecBottom.push_back( nVertexVal );
+	}
+
+	qDebug() << "============Top==========";
+	for( auto i : vecTop )
+	{
+		qDebug() << i;
+	}
+
+
+	qDebug() << "==========Bottom=========";
+	for( auto i : vecBottom )
+	{
+		qDebug() << i;
+	}
+
+	clear();
+	m_vecTopItems.clear();
+	m_vecBottomItems.clear();
+
+
+	QColor golden( 163, 136, 49 );
+	QBrush brush( golden );
+	QPen pen( golden );
+
+	IntervalGraph intervalGraph( vecTop, vecBottom );
+	std::multimap< size_t, IntervalData > mapIntervals( intervalGraph.getMapIntervals() );
+
+	for( size_t i = 0; i < m_nCols; ++i )
+	{
+		// @TODO create items with texts
+		//QGraphicsTextItem* pTextItem = new QGraphicsTextItem(std::to_string(i).c_str());
+		//pTextItem->setPos( nStartX + i * nDeltaX - 8, nStartY - 19 );
+		//addItem( pTextItem );
+
+		// draw top pins
+		drawVertex( -1, i, 2, true, pen );
+		m_vecTopItems[i]->setPlainText( std::to_string( vecTop[i] ).c_str() );
+
+		// draw bottom pins
+		drawVertex( m_nRows, i, 2, false, pen );
+		m_vecBottomItems[i]->setPlainText( std::to_string( vecBottom[i] ).c_str() );
+	}
+
+	for (size_t i = 0; i < m_nRows; ++i)
+	{
+		QPen pen(Qt::gray, 1);
+		// draw terminals
+		drawLine( i, 0, i, m_nCols - 1, pen );
+	}
+	
+	qDebug() << "Interval count: " << mapIntervals.size();
+
+	double dDeltaX = sceneRect().width() / ( m_nCols + 1 );
+
+	for( auto& it : mapIntervals )
+	{
+		drawInterval( it.second.getCols(), it.first, dDeltaX, 2, pen );
+	}
+} 
+
+QPoint CanvasGraphicsScene::getOffsetPosFromIndex(double dRow, double dCol, double dOffX, double dOffY)
+{
+	double dWidth = sceneRect().width(), 
+		   dDeltaX = dWidth / ( m_nCols + 1 ),
+		   dX = dDeltaX + dCol * dDeltaX + dOffX,
+		   dHeight = sceneRect().height(),
+		   dDeltaY = dHeight / ( m_nRows + 3 ),
+		   dY = 2 * dDeltaY + dRow * dDeltaY + dOffY;
+
+	return { (int)dX, (int)dY };
+}
+
+QLine CanvasGraphicsScene::getLine( double dRow1, double dCol1, double dRow2, double dCol2 )
+{
+	const QPoint& pt1 = getPosFromIndex( dRow1, dCol1 ),
+				  pt2 = getPosFromIndex( dRow2, dCol2 );
+
+	return { pt1, pt2 };
+}
+
+QGraphicsLineItem* 
+CanvasGraphicsScene::drawLine( double dRow1, double dCol1, 
+							   double dRow2, double dCol2, 
+							   const QPen& pen /* = QPen() */ )
+{
+	return addLine( getLine( dRow1, dCol1, dRow2, dCol2 ), pen );
+}
+
+QGraphicsEllipseItem* 
+CanvasGraphicsScene::drawVertex( double dRow, double dCol, 
+								 double dRad, bool bIsTop, const QPen& pen /* = QPen() */ )
+{
+	// Add ellipse at index [dRow][dCol]
+	// Left top angle of rectangle containing the circle should be
+	// offset ${radius} to left and up, so the center of the circle
+	// will be right on the position from index.
+	const QPoint& leftTopAngle = getOffsetPosFromIndex( dRow, dCol, -dRad );
+
+	auto textItem = addText( "0" );
+	textItem->setDefaultTextColor( pen.color() );
+	textItem->setPos( leftTopAngle.x() - 5, leftTopAngle.y() - 20 );
+	textItem->setTextInteractionFlags( Qt::TextEditorInteraction );
+	textItem->setTextWidth( 35 );
+
+	if( bIsTop )
+		m_vecTopItems.push_back( textItem );
+	else
+		m_vecBottomItems.push_back( textItem );
+
+	return addEllipse( leftTopAngle.x(), leftTopAngle.y(), 
+					   2 * dRad, 2 * dRad, pen );
+}
+
+GraphicsIntervalItem* 
+CanvasGraphicsScene::drawInterval( const std::set<size_t>& setCols, double dRow, 
+								   double dDeltaX, double dRad, const QPen& pen /* = QPen() */ )
+{
+	qDebug() << "Draw interval";
+	GraphicsIntervalItem* pIntervalItem = new GraphicsIntervalItem( setCols, dDeltaX, dRad );
+	double dCol = *( setCols.begin() );
+	pIntervalItem->setPos( getOffsetPosFromIndex( dRow, dCol, -dRad ) );
+	addItem( pIntervalItem );
+
+	return pIntervalItem;
+}
+
+QPoint CanvasGraphicsScene::getOffsetPosFromIndex( double dRow, double dCol, double dOff )
+{
+	return getOffsetPosFromIndex( dRow, dCol, dOff, dOff );
+}
+
+QPoint CanvasGraphicsScene::getPosFromIndex( double dRow, double dCol )
+{
+	return getOffsetPosFromIndex( dRow, dCol, 0 );
+}
+
